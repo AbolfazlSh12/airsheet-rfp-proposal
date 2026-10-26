@@ -51,7 +51,7 @@ Keep (generic shell):
 | helpers, `toast(msg, {label, run})` | digits, money, escaping, localStorage wrapper, toast with undo |
 | catalogue data store | `DB` (format `airsheet-forms-catalog`, v1), `validDB`, `reindex`, `commit`, `freshDB` |
 | `DEMO_TARGETS` | key → Persian label for every demo key; the item editor offers these |
-| theme | auto / light / dark, stored per browser; respects the viewer's own `data-theme` when "auto" |
+| theme | Airsheet's round header toggle (moon in light, sun in dark); until clicked, the host's `data-theme` or the system decides |
 | views, popover & modal, markers | tabs, hash, one popover, one modal, the «i» markers that link demo parts to items |
 | catalogue: rail + cards | category rail with counts and a «انتخاب‌شده‌ها» filter, card grid, search |
 | edit mode | edit / delete (with undo) / add items; rename / add / delete categories; meeting notes |
@@ -106,8 +106,11 @@ A demo key ties a catalogue item to a place in the prototype.
 
 ## Design rules
 
-- It should look like a screen of Airsheet, not a landing page: compact app bar, category rail, white cards with a
-  1 px border, product form with the customer's labels, pastel tags in Airsheet's palette.
+- It should look like a screen of Airsheet, not a landing page: compact app bar, a category rail like Airsheet's
+  sidebar (nested items hang off a line), cards like Airsheet's gallery cards (16 px radius, 1 px border, Airsheet's
+  small shadow, a field as a small label over its value), the search in a bordered view toolbar, the picks button as
+  the one primary button, product form with the customer's labels, pastel tags in Airsheet's palette. Take each look
+  from cloud-front (`ViewGallery.vue`, `BaseTables.vue`, `HeaderThemeToggle.vue`), not from memory.
 - Things that read as machine-made and must not appear: a thick accent bar on a rounded card, 1 px border plus a wide
   soft shadow, decorative ◆ markers, teal-on-dark themes, rows of big-number stat tiles, gradients, emoji.
 - Persian typography: «·» next to Persian digits reads as a zero; separate with «،» or parentheses. Keep their

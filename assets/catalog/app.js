@@ -77,7 +77,6 @@
     clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" width="16" height="16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>',
     sun: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>',
     moon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3a5.5 5.5 0 1 0 6.6 6.6z"/></svg>',
-    auto: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" fill="currentColor"/></svg>',
   };
 
   // ---------- catalogue data store ----------
@@ -144,30 +143,28 @@
   };
 
   // ---------- theme ----------
+  // Airsheet's header toggle: one round button, a moon in light and a sun in dark. Until the viewer clicks it, the page
+  // follows the host's data-theme (inside the artifact viewer) or the system.
   const hostTheme = document.documentElement.getAttribute("data-theme");
-  const THEME_LABEL = { auto: "خودکار", light: "روشن", dark: "تیره" };
+  const sysDark = matchMedia("(prefers-color-scheme: dark)");
   let theme = store.get("theme", "auto");
+  const shownTheme = () => (theme !== "auto" ? theme : hostTheme || (sysDark.matches ? "dark" : "light"));
   function applyTheme(t) {
     theme = t;
     if (t === "auto") hostTheme ? document.documentElement.setAttribute("data-theme", hostTheme) : document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", t);
-    $("#theme-btn").innerHTML = `${ICON[t === "auto" ? "auto" : t === "light" ? "sun" : "moon"]}<span class="lbl-t">تم ${THEME_LABEL[t]}</span>`;
-    $("#theme-btn").title = "تم: " + THEME_LABEL[t];
+    const dark = shownTheme() === "dark";
+    const b = $("#theme-btn");
+    b.innerHTML = dark ? ICON.sun : ICON.moon;
+    b.classList.toggle("dark", dark);
+    b.title = dark ? "تم روشن" : "تم تیره";
+    b.setAttribute("aria-label", b.title);
     store.set("theme", t);
   }
+  sysDark.addEventListener("change", () => theme === "auto" && applyTheme("auto"));
   $("#theme-btn").addEventListener("click", () => {
-    const p = openPop(
-      $("#theme-btn"),
-      `<div class="menu">${["light", "dark", "auto"].map((t) => `<button type="button" data-t="${t}" aria-pressed="${theme === t}">${ICON[t === "auto" ? "auto" : t === "light" ? "sun" : "moon"]}${THEME_LABEL[t]}${t === "auto" ? " (مثل سیستم)" : ""}${theme === t ? " ✓" : ""}</button>`).join("")}</div>`,
-      200,
-    );
-    p.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-t]")?.dataset.t;
-      if (!t) return;
-      applyTheme(t);
-      closePop();
-      if (F.step === 3 && !F.submitted) renderFill();
-    });
+    applyTheme(shownTheme() === "dark" ? "light" : "dark");
+    if (F.step === 3 && !F.submitted) renderFill();
   });
 
   // ---------- views ----------
@@ -323,7 +320,7 @@
   const hiddenTag = (x) => (x.hide && !CUSTOMER ? `<span class="tag gray">پنهان از مشتری</span>` : "");
   // person-hours estimate (h, a positive integer): shown on the card, summed in the drawer, typed in edit mode
   const sumH = (list) => list.reduce((t, x) => t + (x.h > 0 ? x.h : 0), 0);
-  const hTag = (x) => (x.h > 0 ? `<span class="tag gray c-h">برآورد: ${money(x.h)} نفرساعت</span>` : "");
+  const hTag = (x) => (x.h > 0 ? `<div class="c-h"><span>برآورد</span><b>${money(x.h)} نفرساعت</b></div>` : "");
   const hInput = (x) => (CUSTOMER ? "" : `<label class="ed c-hin">نفرساعت<input class="inp" inputmode="numeric" data-h="${x.id}" value="${x.h > 0 ? fa(x.h) : ""}" aria-label="نفرساعت ${esc(x.n)}"></label>`);
   const edBar = (kind, id) =>
     `<span class="ed ed-bar"><button class="icon-btn" data-edit-item="${kind}:${id}" aria-label="ویرایش">${ICON.edit}</button><button class="icon-btn" data-del-item="${kind}:${id}" aria-label="حذف">${ICON.del}</button></span>`;
@@ -333,7 +330,7 @@
       <h3>${esc(s.n)}${s.fa ? `<small>${esc(s.fa)}</small>` : ""}</h3>
       ${s.v ? `<p class="c-v">${esc(s.v)}</p>` : ""}${listHtml(s.pts)}
       ${s.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(s.note)}</div>` : ""}
-      <div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div>${hTag(s)}${hInput(s)}</div></article>`;
+      ${hTag(s)}<div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div>${hInput(s)}</div></article>`;
   }
   function capCard(c, i) {
     return `<article class="card ${picked(c.id) ? "picked" : ""}" id="it-${c.id}">
@@ -341,7 +338,7 @@
       <h3>${esc(c.n)}</h3>
       ${c.v ? `<p class="c-v">${esc(c.v)}</p>` : ""}${c.x ? `<p class="c-x">${esc(c.x)}</p>` : ""}
       ${c.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(c.note)}</div>` : ""}
-      <div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div>${hTag(c)}${hInput(c)}<label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
+      ${hTag(c)}<div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div>${hInput(c)}<label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
   }
   function renderRail() {
     const cnt = (kind, pred) => (kind === "a" ? DB.srs : DB.caps).filter(pred).length;

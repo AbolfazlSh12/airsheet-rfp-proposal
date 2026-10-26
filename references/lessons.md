@@ -41,6 +41,8 @@
   Edge.
 - The calendar `MONTHS` and `TODAY` are hard-coded; update them for each meeting date.
 - Light theme `#6b7280` text on `#f3f4f6` is 4.39:1; the template uses `#596170`, and darker green and red.
+- An inline SVG with no width rule grows to its container: the old theme menu showed 300 px icons. Every place that
+  shows an icon needs a size rule. Airsheet's orange-500 moon is 2.8:1 on white; the template uses orange-600.
 
 ## Hub
 
