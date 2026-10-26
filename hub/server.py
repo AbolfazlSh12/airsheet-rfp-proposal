@@ -10,6 +10,8 @@ Standard library only. Run behind a TLS reverse proxy (nginx):
 
     DATA_DIR=/data ADMIN_PASSWORD=... TRUST_PROXY=1 python3 server.py 8080
 
+HOST (default 0.0.0.0) picks the listening address: without Docker, bind only the address the proxy reaches.
+
 ponytail: ThreadingHTTPServer and one SQLite file are enough for a handful of customers a month; move to a real
 framework and database only if this ever serves many concurrent users.
 """
@@ -278,8 +280,9 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
     PAGES.mkdir(parents=True, exist_ok=True)
     db().close()
-    print(f"proposal hub on :{port}, data in {DATA}, admin {'on' if ADMIN_PASSWORD else 'off (no ADMIN_PASSWORD)'}", flush=True)
-    ThreadingHTTPServer(("0.0.0.0", port), Hub).serve_forever()
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"proposal hub on {host}:{port}, data in {DATA}, admin {'on' if ADMIN_PASSWORD else 'off (no ADMIN_PASSWORD)'}", flush=True)
+    ThreadingHTTPServer((host, port), Hub).serve_forever()
 
 
 if __name__ == "__main__":

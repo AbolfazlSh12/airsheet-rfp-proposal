@@ -27,6 +27,20 @@ Code: `hub/server.py` (Python standard library, SQLite), `hub/Dockerfile`, `hub/
    Docker, put both containers on one network and proxy to `http://proposals-hub:8080` instead of `127.0.0.1:8090`.
 4. Open `https://proposals.<domain>/admin/`: the browser asks for the admin user and password.
 
+### Without Docker access
+
+When your account cannot use Docker or sudo but nginx runs in a Docker container: run `server.py` as your own user
+with `HOST=<the gateway of nginx's Docker network>` (e.g. `172.18.0.1`, from `ip -4 addr`), so only containers
+reach it, and keep it alive with one crontab line:
+`* * * * * flock -n $HOME/proposals-hub/.lock $HOME/proposals-hub/run.sh >> $HOME/proposals-hub/hub.log 2>&1`
+(`run.sh` loads `hub.env` and runs `python3 -I server.py 8090`; proposals go in `~/proposals-hub/data/proposals/`).
+Adding a cron job on a shared server needs the user's yes. In nginx, add a `server` block that proxies to
+`http://<gateway>:8090`. Before anyone reloads, check the whole config with `nginx -t` in a local nginx container: use
+`--add-host` for every upstream name and test certificates, and run it on the unchanged file first. A config mounted
+as a single file must be edited in place (`cat >>`), because a new inode is not seen until the container is
+recreated. Back the file up first, and leave the reload to whoever has Docker:
+`docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`.
+
 ## Publishing a proposal
 
 1. In the internal page, curate the catalogue: edit wording, mark items «در نسخه‌ی مشتری نمایش داده نشود», remove
