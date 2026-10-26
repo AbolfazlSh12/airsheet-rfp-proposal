@@ -13,7 +13,8 @@ A Claude Code skill that turns a customer's RFP, SRS or requirement list for [Ai
 `SKILL.md` is the entry point. `references/` holds the method (reading the document, checking the code, the internal
 report, the customer page, verification, lessons). `assets/catalog/` is a complete reference build to copy for each new
 customer, and `assets/examples/internal-report.html` a reference internal report. `scripts/` holds a UTF-8 static
-server for local checks and the offline build.
+server for local checks and the offline build (internal or `--customer`). `hub/` is the proposal hub: one
+subdomain on the test server that serves every customer page and stores what each customer picked.
 
 The reference build and the example report contain one customer's requirement content; keep this repository private.
 

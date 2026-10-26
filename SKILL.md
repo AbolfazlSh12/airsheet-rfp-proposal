@@ -90,12 +90,18 @@ in light and dark, nothing overflows on a phone. Look at desktop screenshots of 
 
 ## Step 8. Publish and package (gate)
 
-- Publish `catalog/index.html` as an artifact with `data.js` and `app.js` as files. Inside the hosted viewer the page
-  cannot download, print or open file pickers; it hides those actions and keeps edits in the browser.
-- Build the offline single file with `scripts/build-standalone.py` (inlines SheetJS and the Vazirmatn font from
-  cloud-front), test it served without a charset header, zip it, and send it to the user. In Chrome or Edge the zip
-  version saves every edit into a JSON file the user picks.
-- Tell the user that the artifact is private until they share it.
+There are two builds of the same page:
+
+- **Internal (for the user):** every edit tool, notes, the «در نسخه‌ی مشتری نمایش داده نشود» flag, file sync. Publish
+  `catalog/index.html` as a private artifact (with `data.js` and `app.js` as files) and build the offline zip with
+  `scripts/build-standalone.py`. In Chrome or Edge the zip saves every edit into a JSON file the user picks. Inside the
+  hosted viewer the page cannot download, print or open file pickers; it hides those actions.
+- **Customer:** `build-standalone.py … --customer <slug> --db <master.json>` leaves out hidden items, notes and the
+  edit and file tools, and adds «انتخاب‌ها و ارسال», which posts the customer's picks and comments to the proposal hub.
+  Read `references/hub.md`: one subdomain on the test server serves every proposal under its own unguessable slug,
+  and the user reads all submissions at `/admin/`. Copying the folder to the server is the user's step.
+
+Customers in Iran cannot open claude.ai, so the artifact is for the user and the team only.
 
 ## Customer-facing rules (always)
 
@@ -131,4 +137,6 @@ When the customer has seen a version, keep item ids stable so their picks and no
 | `assets/catalog/` | reference build: `index.html`, `app.js`, `data.js` |
 | `assets/examples/internal-report.html` | reference internal report |
 | `scripts/serve.py` | static server with UTF-8 headers for local checks |
-| `scripts/build-standalone.py` | single offline HTML with SheetJS and Vazirmatn inlined |
+| `scripts/build-standalone.py` | single offline HTML with SheetJS and Vazirmatn inlined; `--customer` builds the customer version |
+| `references/hub.md` | the proposal hub: setup once, publish each proposal, read submissions |
+| `hub/` | the hub itself: `server.py`, `Dockerfile`, `docker-compose.yml`, `nginx-site.conf`, `test_server.py` |

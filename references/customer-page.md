@@ -65,6 +65,16 @@ Rewrite for the customer (everything under `// ---------- demo data ----------` 
 If the customer's example is not a form (an approval process, a report, a portal), keep the three panes and rebuild
 the "پر کردن فرم" pane around their example; the grid, row dialog and pickers are still useful.
 
+## Customer mode and hidden items
+
+- In edit mode every item has «در نسخه‌ی مشتری نمایش داده نشود» (`hide: true`); the internal page tags such cards
+  «پنهان از مشتری». Notes (`note`) are internal too.
+- `build-standalone.py --customer <slug> --db <master.json>` writes the curated data into the file without hidden
+  items and notes (they are not in the source at all), and sets `window.AFC_CONFIG = {mode:"customer", slug, submitUrl}`.
+- In customer mode the page removes the edit and file buttons, keeps picks, comments and the sender's details in
+  browser storage under `afc:<slug>:`, and the drawer gets the send form. It posts
+  `{name, role, mobile, general, picks:[{id,n,c}], comments:{id:text}}` to `/api/<slug>/submit` (see `hub.md`).
+
 ## The demo-key contract
 
 A demo key ties a catalogue item to a place in the prototype.

@@ -42,6 +42,14 @@
 - The calendar `MONTHS` and `TODAY` are hard-coded; update them for each meeting date.
 - Light theme `#6b7280` text on `#f3f4f6` is 4.39:1; the template uses `#596170`, and darker green and red.
 
+## Hub
+
+- A 401 with `WWW-Authenticate: Basic` makes the browser show a login prompt; a test `fetch` without credentials then
+  hangs until the tool times out (30 minutes). Send the header or test with `curl`.
+- The unit test did not start `main()`; a startup typo only showed when the Docker image ran. Always run the image
+  once, not only `test_server.py`.
+- A `docker run` started as a preview keeps running after the preview is stopped; stop the container yourself.
+
 ## Packaging
 
 - Inline SheetJS (`cloud-front/node_modules/xlsx/dist/xlsx.full.min.js`, 0.18.5) and Vazirmatn

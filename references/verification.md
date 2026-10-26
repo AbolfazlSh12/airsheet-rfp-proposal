@@ -73,7 +73,21 @@ At 1360 × 900 and 390 × 844: no element outside the viewport except inside `.t
 `.tabs`, `.rail`; the top bar stays short on a phone. Take desktop screenshots of catalogue, a form step, the row
 dialog and the clock, in both themes, and look at them.
 
-## 7. The offline file
+## 7. The customer build and the hub
+
+```bash
+python3 -I hub/test_server.py                 # hub routes, traversal, validation, admin auth, CSV, rate limit
+docker build -t proposals-hub-test hub/       # the image the server runs
+```
+
+Run the image (a launch config with `docker run --rm -p 127.0.0.1:8091:8080 -e ADMIN_PASSWORD=… -v <dist>:/data/proposals:ro
+proposals-hub-test`), open `http://localhost:8091/<slug>/` and check: no `#edit-btn` or `#file-btn`, hidden items and
+notes absent from the page source, picks survive a reload, sending without a name is refused, a valid send shows the
+confirmation, and `/admin/<slug>` (fetch with an `Authorization: Basic` header) lists it. Never `fetch('/admin/')`
+without credentials from a Playwright page: the browser's login prompt makes the call hang until the tool times out.
+Stopping the preview does not stop the container: `docker stop proposals-hub-test`.
+
+## 8. The offline file
 
 Build, serve the dist folder with a plain server (`python3 -m http.server`, no charset), then check:
 `document.characterSet === "UTF-8"`, `document.compatMode === "CSS1Compat"`, `!!window.XLSX`,

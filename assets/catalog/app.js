@@ -19,10 +19,15 @@
   const money = (n) => (Number.isFinite(n) ? fa(group3(n)) : "—");
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  // A customer build sets window.AFC_CONFIG = { mode: "customer", slug, submitUrl } (scripts/build-standalone.py --customer).
+  const CFG = window.AFC_CONFIG || {};
+  const CUSTOMER = CFG.mode === "customer";
+  // every proposal on the hub shares one origin, so browser storage is kept per proposal
+  const NS = "afc:" + (CFG.slug ? CFG.slug + ":" : "");
   const store = {
     get(k, d) {
       try {
-        const v = localStorage.getItem("afc:" + k);
+        const v = localStorage.getItem(NS + k);
         return v == null ? d : JSON.parse(v);
       } catch {
         return d;
@@ -30,12 +35,12 @@
     },
     set(k, v) {
       try {
-        localStorage.setItem("afc:" + k, JSON.stringify(v));
+        localStorage.setItem(NS + k, JSON.stringify(v));
       } catch {}
     },
     del(k) {
       try {
-        localStorage.removeItem("afc:" + k);
+        localStorage.removeItem(NS + k);
       } catch {}
     },
   };
@@ -82,6 +87,8 @@
   const validDB = (d) =>
     !!d && d.format === "airsheet-forms-catalog" && ["srsGroups", "srs", "cats", "caps", "picks"].every((k) => Array.isArray(d[k])) && [...d.srs, ...d.caps].every((x) => x && x.id && typeof x.n === "string");
   let DB = (() => {
+    // the customer always sees the build's own data; only their picks live in the browser
+    if (CUSTOMER) return { ...freshDB(), picks: store.get("picks", []) };
     const saved = store.get("db", null);
     if (validDB(saved)) return saved;
     const d = freshDB();
@@ -105,9 +112,10 @@
     DB.caps.forEach((c) => c.d && add(c.d, { id: c.id, label: c.n }));
   }
   reindex();
+  const persist = () => (CUSTOMER ? store.set("picks", DB.picks) : store.set("db", DB));
   function commit() {
     DB.saved = new Date().toISOString();
-    store.set("db", DB);
+    persist();
     reindex();
     FILE.schedule();
     renderCatalog();
@@ -312,11 +320,12 @@
       .join("");
   const listHtml = (pts) =>
     !pts || !pts.length ? "" : pts.length <= 2 ? `<ul>${pts.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : `<details><summary>جزئیات (${fa(pts.length)} مورد)</summary><ul>${pts.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>`;
+  const hiddenTag = (x) => (x.hide && !CUSTOMER ? `<span class="tag gray">پنهان از مشتری</span>` : "");
   const edBar = (kind, id) =>
     `<span class="ed ed-bar"><button class="icon-btn" data-edit-item="${kind}:${id}" aria-label="ویرایش">${ICON.edit}</button><button class="icon-btn" data-del-item="${kind}:${id}" aria-label="حذف">${ICON.del}</button></span>`;
   function srsCard(s) {
     return `<article class="card" id="it-${s.id}">
-      <div class="c-top"><span class="c-no">بند ${esc(s.no || "")}</span>${edBar("a", s.id)}</div>
+      <div class="c-top"><span class="c-no">بند ${esc(s.no || "")} ${hiddenTag(s)}</span>${edBar("a", s.id)}</div>
       <h3>${esc(s.n)}${s.fa ? `<small>${esc(s.fa)}</small>` : ""}</h3>
       ${s.v ? `<p class="c-v">${esc(s.v)}</p>` : ""}${listHtml(s.pts)}
       ${s.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(s.note)}</div>` : ""}
@@ -324,7 +333,7 @@
   }
   function capCard(c, i) {
     return `<article class="card ${picked(c.id) ? "picked" : ""}" id="it-${c.id}">
-      <div class="c-top"><span class="c-no">ب-${fa(i)}</span>${edBar("b", c.id)}</div>
+      <div class="c-top"><span class="c-no">ب-${fa(i)} ${hiddenTag(c)}</span>${edBar("b", c.id)}</div>
       <h3>${esc(c.n)}</h3>
       ${c.v ? `<p class="c-v">${esc(c.v)}</p>` : ""}${c.x ? `<p class="c-x">${esc(c.x)}</p>` : ""}
       ${c.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(c.note)}</div>` : ""}
@@ -428,7 +437,7 @@
     if (!id) return;
     DB.picks = e.target.checked ? [...new Set([...DB.picks, id])] : DB.picks.filter((x) => x !== id);
     e.target.closest(".card").classList.toggle("picked", e.target.checked);
-    store.set("db", DB);
+    persist();
     FILE.schedule();
     renderRail();
     renderPicks();
@@ -496,7 +505,9 @@
         <div class="fld"><label for="e-d">نمایش در فرم</label><select class="inp" id="e-d">${targetOpts(it.d || "")}</select></div>`;
     const m = openModal(
       cur ? "ویرایش " + (isA ? "بند" : "قابلیت") : isA ? "بند تازه" : "قابلیت تازه",
-      body + `<div class="fld"><label for="e-note">یادداشت جلسه</label><textarea class="inp" id="e-note" style="min-height:60px" placeholder="نظر مشتری یا نکته‌ای که در جلسه گفته شد">${esc(it.note || "")}</textarea><span class="hint">روی کارت و در خروجی‌ها نمایش داده می‌شود.</span></div><span class="err" id="e-err"></span>`,
+      body +
+        `<label class="pick"><input type="checkbox" id="e-hide" ${it.hide ? "checked" : ""}> در نسخه‌ی مشتری نمایش داده نشود</label>` +
+        `<div class="fld"><label for="e-note">یادداشت جلسه</label><textarea class="inp" id="e-note" style="min-height:60px" placeholder="نظر مشتری یا نکته‌ای که در جلسه گفته شد">${esc(it.note || "")}</textarea><span class="hint">روی کارت و در خروجی‌ها نمایش داده می‌شود.</span></div><span class="err" id="e-err"></span>`,
       `<button class="btn pri" data-save-item>ذخیره</button><button class="btn" data-x>انصراف</button>${cur ? `<button class="btn" data-del-here style="margin-inline-start:auto;color:var(--red)">${ICON.del}حذف</button>` : ""}`,
     );
     $("#e-ds-add", m)?.addEventListener("click", () => $("#e-ds", m).insertAdjacentHTML("beforeend", dsRow()));
@@ -513,6 +524,8 @@
       it.v = $("#e-v", m).value.trim();
       it.note = $("#e-note", m).value.trim();
       if (!it.note) delete it.note;
+      it.hide = $("#e-hide", m).checked;
+      if (!it.hide) delete it.hide;
       if (isA) {
         it.no = $("#e-no", m).value.trim();
         it.g = $("#e-g", m).value;
@@ -584,26 +597,94 @@
 
   // ---------- selections drawer ----------
   const chosenCaps = () => DB.caps.filter((c) => picked(c.id));
+  // customer build: a comment per picked item, who they are, and a send button that posts to the proposal hub
+  const COMMENTS = CUSTOMER ? store.get("comments", {}) : {};
+  const WHO = { name: "", role: "", mobile: "", general: "", ...(CUSTOMER ? store.get("who", {}) : {}) };
   function renderPicks() {
     const chosen = chosenCaps();
     $("#pick-count").textContent = fa(chosen.length);
+    const li = (c) =>
+      `<li><span>${esc(c.n)}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>` +
+      (CUSTOMER
+        ? `<textarea class="inp cmt" data-cmt="${c.id}" placeholder="توضیح شما درباره‌ی این مورد (اختیاری)" aria-label="توضیح ${esc(c.n)}">${esc(COMMENTS[c.id] || "")}</textarea>`
+        : c.note
+          ? `<span class="hint">یادداشت: ${esc(c.note)}</span>`
+          : "") +
+      `</li>`;
     $("#picks-body").innerHTML =
-      `<p class="hint">همه‌ی ${fa(DB.srs.length)} بند سند نیازمندی در دامنه است. قابلیت‌های تکمیلی انتخاب‌شده:</p>` +
+      `<p class="hint">همه‌ی ${fa(DB.srs.length)} بند سند نیازمندی${CUSTOMER ? " شما" : ""} در دامنه است. قابلیت‌های تکمیلی انتخاب‌شده:</p>` +
       (chosen.length
         ? DB.cats
             .filter((cat) => chosen.some((c) => c.c === cat.k))
-            .map(
-              (cat) =>
-                `<h3>${esc(cat.n)}</h3><ul>${chosen
-                  .filter((c) => c.c === cat.k)
-                  .map((c) => `<li><span>${esc(c.n)}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>${c.note ? `<span class="hint">یادداشت: ${esc(c.note)}</span>` : ""}</li>`)
-                  .join("")}</ul>`,
-            )
+            .map((cat) => `<h3>${esc(cat.n)}</h3><ul>${chosen.filter((c) => c.c === cat.k).map(li).join("")}</ul>`)
             .join("")
-        : `<p class="empty">هنوز قابلیت تکمیلی انتخاب نشده است. روی کارت‌های بخش «ب» گزینه‌ی «نیاز داریم» را بزنید.</p>`);
+        : `<p class="empty">هنوز قابلیت تکمیلی انتخاب نشده است. روی کارت‌های بخش «ب» گزینه‌ی «نیاز داریم» را بزنید.</p>`) +
+      (CUSTOMER ? sendForm() : "");
     $("#xlsx-picks").hidden = IN_FRAME || !window.XLSX;
   }
+  function sendForm() {
+    const sent = store.get("sentAt", "");
+    const f = (k, label, attrs = "") => `<div class="fld"><label for="w-${k}">${label}</label><input class="inp" id="w-${k}" data-who="${k}" value="${esc(WHO[k])}" ${attrs}></div>`;
+    return `<div class="send"><h3>ارسال برای ما</h3>
+      ${f("name", 'نام و نام خانوادگی <span class="req">*</span>', 'autocomplete="name"')}
+      <div class="row">${f("role", "سمت")}${f("mobile", "شماره‌ی همراه", 'inputmode="tel" autocomplete="tel" placeholder="۰۹۱۲…"')}</div>
+      <div class="fld"><label for="w-general">توضیح کلی</label><textarea class="inp" id="w-general" data-who="general">${esc(WHO.general)}</textarea></div>
+      <div><button class="btn pri" id="send-picks">${sent ? "ارسال دوباره با تغییرها" : "ارسال انتخاب‌ها"}</button></div>
+      <p class="hint" id="send-m" aria-live="polite">${sent ? `آخرین ارسال شما: ${esc(sent)}` : "پس از ارسال هم می‌توانید انتخاب‌ها را تغییر دهید و دوباره بفرستید."}</p></div>`;
+  }
+  async function sendPicks() {
+    const m = $("#send-m");
+    if (!WHO.name.trim()) {
+      m.textContent = "نام خود را بنویسید.";
+      return $("#w-name").focus();
+    }
+    const mobile = toEn(WHO.mobile).replace(/\D/g, "");
+    if (mobile && !/^09\d{9}$/.test(mobile)) {
+      m.textContent = "شماره‌ی همراه باید ۱۱ رقم و با ۰۹ باشد.";
+      return $("#w-mobile").focus();
+    }
+    const chosen = chosenCaps();
+    const payload = {
+      name: WHO.name.trim(), role: WHO.role.trim(), mobile, general: WHO.general.trim(),
+      picks: chosen.map((c) => ({ id: c.id, n: c.n, c: DB.cats.find((x) => x.k === c.c)?.n || "" })),
+      comments: Object.fromEntries(chosen.filter((c) => (COMMENTS[c.id] || "").trim()).map((c) => [c.id, COMMENTS[c.id].trim()])),
+    };
+    const btn = $("#send-picks");
+    btn.disabled = true;
+    m.innerHTML = `<span class="spin"></span> در حال ارسال…`;
+    try {
+      const r = await fetch(CFG.submitUrl || `/api/${CFG.slug}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 429) throw new Error("چند ارسال پشت سر هم انجام شد؛ یک دقیقه بعد دوباره بفرستید.");
+      if (!r.ok || !j.ok) throw new Error("ارسال انجام نشد. دوباره تلاش کنید.");
+      let at;
+      try {
+        at = new Date().toLocaleString("fa-IR-u-ca-persian", { dateStyle: "medium", timeStyle: "short" });
+      } catch {
+        at = fa(j.at || clock());
+      }
+      store.set("sentAt", at);
+      m.textContent = `انتخاب‌های شما ثبت شد (${at}). اگر چیزی را تغییر دادید، دوباره ارسال کنید.`;
+      btn.textContent = "ارسال دوباره با تغییرها";
+      toast("انتخاب‌های شما ثبت شد. سپاس.");
+    } catch (e) {
+      m.textContent = /[؀-ۿ]/.test(e.message || "") ? e.message : "ارسال انجام نشد. اتصال اینترنت را بررسی کنید و دوباره بفرستید.";
+    }
+    btn.disabled = false;
+  }
+  $("#picks-body").addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.dataset.cmt) {
+      COMMENTS[t.dataset.cmt] = t.value;
+      store.set("comments", COMMENTS);
+    }
+    if (t.dataset.who) {
+      WHO[t.dataset.who] = t.value;
+      store.set("who", WHO);
+    }
+  });
   $("#picks-body").addEventListener("click", (e) => {
+    if (e.target.closest("#send-picks")) return sendPicks();
     const id = e.target.closest("[data-unpick]")?.dataset.unpick;
     if (!id) return;
     DB.picks = DB.picks.filter((x) => x !== id);
@@ -2583,9 +2664,15 @@
 
   // ---------- boot ----------
   applyTheme(theme);
+  if (CUSTOMER) {
+    // the customer never sees editing, file handling or internal notes
+    ["#edit-btn", "#edit-bar", "#file-btn"].forEach((s) => $(s)?.remove());
+    document.body.classList.add("customer");
+    $("#open-picks .lbl-t").textContent = "انتخاب‌ها و ارسال";
+  }
   renderCatalog();
   renderPicks();
-  FILE.boot();
+  if (!CUSTOMER) FILE.boot();
   renderFill();
   renderRules();
   fillModes();

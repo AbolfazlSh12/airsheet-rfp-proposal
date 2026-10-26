@@ -155,6 +155,10 @@ main{max-width:1280px;margin:0 auto;padding-block:20px 90px}
 .drawer ul{list-style:none;margin:0;padding:0}
 .drawer li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;font-size:13.5px;padding:3px 0}
 .drawer li .hint{grid-column:1/-1}
+.drawer li textarea{grid-column:1/-1;min-height:52px;font-size:13px}
+.send{border-top:1px solid var(--line);margin-top:14px;padding-top:4px;display:grid;gap:8px}
+.cust-only{display:none!important}
+.customer .cust-only{display:grid!important}
 
 /* demo shell */
 .demo-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:14px}
@@ -436,6 +440,7 @@ td.n{font-variant-numeric:tabular-nums}
       <h1>فهرست قابلیت‌های ماژول فرم‌ساز پیشرفته</h1>
       <p>بخش «الف» نیازمندی‌های «سند نیازمندی‌های ماژول فرم‌ساز پیشرفته» (مهر ۱۴۰۵) را با همان ترتیب و شماره‌گذاری سند نشان می‌دهد. بخش «ب» قابلیت‌های تکمیلی است که می‌توانند همراه آن پیاده‌سازی شوند. هر مورد در «نمایش فرم» دیده می‌شود.</p>
     </div>
+    <div class="note cust-only" style="margin-bottom:14px"><b>انتخاب شما</b><span>قابلیت‌های تکمیلی مورد نیاز را با «نیاز داریم» علامت بزنید و در پایان از دکمه‌ی «انتخاب‌ها و ارسال» برای ما بفرستید. انتخاب‌ها در همین مرورگر می‌ماند و بعداً هم می‌توانید تغییرشان دهید.</span></div>
     <div class="cat-wrap">
       <nav class="rail" id="rail" aria-label="دسته‌ها"></nav>
       <div>

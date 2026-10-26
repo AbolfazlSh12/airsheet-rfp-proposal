@@ -1,0 +1,17 @@
+services:
+  hub:
+    build: .
+    container_name: proposals-hub
+    restart: unless-stopped
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:8090:8080"   # only nginx on this host reaches it
+    volumes:
+      - ./proposals:/data/proposals:ro   # one folder per proposal; publish = copy a folder here
+      - hubdb:/data/db                   # submissions (SQLite)
+
+volumes:
+  hubdb:
