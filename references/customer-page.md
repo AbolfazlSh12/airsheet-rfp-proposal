@@ -14,6 +14,8 @@ cp -r ~/.claude/skills/airsheet-rfp-proposal/assets/catalog <workspace>/document
   close to the customer's own sentence. Sub-points ("pts") are their sub-sentences.
 - Part B title «ب. قابلیت‌های تکمیلی»: what can be built along with their items. Phrase each as what the user gets, not
   as what exists. Avoid «امروز», «موجود», «پیکربندی», «بدون کد», «بدون برنامه‌نویس», «v1/v2», internal names.
+  List only what has to be built. Leave out every capability Airsheet already has (status «ok» in the internal
+  check), however useful: offering it either gives away that it exists or charges for nothing.
 - Tour texts cite their item numbers («بند ۱-۲-۹»), never our capability codes.
 - Before publishing, search the three files for the forbidden words (see `verification.md`).
 
@@ -30,11 +32,13 @@ window.TOUR = [{ t: "step title", go: "<demo key>", say: "talking point" }, …]
 
 - `ds` (Part A) is a list of `[demoKey, buttonLabel]`; `d` (Part B) is one demo key. Every key must exist (below).
 - Ids must stay stable once the customer has seen a version: picks and notes in their JSON file refer to them.
-- `h` (optional, either part) is the person-hours estimate, a positive integer, entered by the user. In edit mode
+- `h` (optional, either part) is the person-hours estimate, a positive integer. When the user asks for suggested
+  hours, base them on the internal sizes, counting 8 h a day with tests for every role: XS 8, S 16–24, M 56–80,
+  L 96–160. An item built on what already exists still gets 8–16 for setup and tests. In edit mode
   every card has a «نفرساعت» box (Enter moves to the next card). The card shows «برآورد: … نفرساعت», and the drawer
   sums document items, picked capabilities and both together. The estimate also goes into the Excel export and into
   each pick sent to the hub. Never enter 0: a customer reads it as «this already exists».
-- Part B for a forms RFP: the 70 capabilities in the reference `data.js` are a good base; drop what does not fit and
+- Part B for a forms RFP: the 51 capabilities in the reference `data.js` are a good base; drop what does not fit and
   add what the code inventory and the document suggest. For other areas (automations, portals, reports…) build the
   list from the inventory, 6–11 categories, 5–10 items each.
 
