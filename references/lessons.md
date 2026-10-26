@@ -49,6 +49,9 @@
 - The unit test did not start `main()`; a startup typo only showed when the Docker image ran. Always run the image
   once, not only `test_server.py`.
 - A `docker run` started as a preview keeps running after the preview is stopped; stop the container yourself.
+- Restarting a cron-run hub over SSH: `pkill -f "python3 -I server.py"` also matches the remote shell that runs it and
+  kills your session. Anchor the pattern (`pkill -u <user> -f '^python3 -I server.py'`); cron starts it again within a
+  minute.
 
 ## Packaging
 
