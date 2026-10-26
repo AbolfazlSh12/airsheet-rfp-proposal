@@ -321,6 +321,10 @@
   const listHtml = (pts) =>
     !pts || !pts.length ? "" : pts.length <= 2 ? `<ul>${pts.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : `<details><summary>جزئیات (${fa(pts.length)} مورد)</summary><ul>${pts.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></details>`;
   const hiddenTag = (x) => (x.hide && !CUSTOMER ? `<span class="tag gray">پنهان از مشتری</span>` : "");
+  // person-hours estimate (h, a positive integer): shown on the card, summed in the drawer, typed in edit mode
+  const sumH = (list) => list.reduce((t, x) => t + (x.h > 0 ? x.h : 0), 0);
+  const hTag = (x) => (x.h > 0 ? `<span class="tag gray c-h">برآورد: ${money(x.h)} نفرساعت</span>` : "");
+  const hInput = (x) => (CUSTOMER ? "" : `<label class="ed c-hin">نفرساعت<input class="inp" inputmode="numeric" data-h="${x.id}" value="${x.h > 0 ? fa(x.h) : ""}" aria-label="نفرساعت ${esc(x.n)}"></label>`);
   const edBar = (kind, id) =>
     `<span class="ed ed-bar"><button class="icon-btn" data-edit-item="${kind}:${id}" aria-label="ویرایش">${ICON.edit}</button><button class="icon-btn" data-del-item="${kind}:${id}" aria-label="حذف">${ICON.del}</button></span>`;
   function srsCard(s) {
@@ -329,7 +333,7 @@
       <h3>${esc(s.n)}${s.fa ? `<small>${esc(s.fa)}</small>` : ""}</h3>
       ${s.v ? `<p class="c-v">${esc(s.v)}</p>` : ""}${listHtml(s.pts)}
       ${s.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(s.note)}</div>` : ""}
-      <div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div></div></article>`;
+      <div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div>${hTag(s)}${hInput(s)}</div></article>`;
   }
   function capCard(c, i) {
     return `<article class="card ${picked(c.id) ? "picked" : ""}" id="it-${c.id}">
@@ -337,7 +341,7 @@
       <h3>${esc(c.n)}</h3>
       ${c.v ? `<p class="c-v">${esc(c.v)}</p>` : ""}${c.x ? `<p class="c-x">${esc(c.x)}</p>` : ""}
       ${c.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(c.note)}</div>` : ""}
-      <div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div><label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
+      <div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div>${hTag(c)}${hInput(c)}<label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
   }
   function renderRail() {
     const cnt = (kind, pred) => (kind === "a" ? DB.srs : DB.caps).filter(pred).length;
@@ -433,6 +437,19 @@
     }
   });
   $("#catalog-list").addEventListener("change", (e) => {
+    const hid = e.target.dataset.h;
+    if (hid) {
+      // saved without a redraw, so focus stays put; Enter jumps to the next card's box (below)
+      const it = SRS_BY[hid] || CAP_BY[hid];
+      const v = parseInt(toEn(e.target.value).replace(/\D/g, ""), 10);
+      if (v > 0) it.h = v;
+      else delete it.h;
+      e.target.value = it.h ? fa(it.h) : "";
+      DB.saved = new Date().toISOString();
+      persist();
+      FILE.schedule();
+      return;
+    }
     const id = e.target.dataset.pick;
     if (!id) return;
     DB.picks = e.target.checked ? [...new Set([...DB.picks, id])] : DB.picks.filter((x) => x !== id);
@@ -442,6 +459,12 @@
     renderRail();
     renderPicks();
     $("#pick-count").textContent = fa(DB.picks.length);
+  });
+  $("#catalog-list").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !e.target.dataset.h) return;
+    e.preventDefault();
+    const all = $$("[data-h]");
+    all[all.indexOf(e.target) + 1]?.focus();
   });
   $("#q").addEventListener("input", (e) => {
     filt.q = e.target.value.trim();
@@ -472,6 +495,7 @@
     $("#edit-btn").classList.toggle("on", on);
     $("#edit-btn").setAttribute("aria-pressed", String(on));
     if (on) setView("catalog");
+    renderCatalog();
   }
   $("#edit-btn").addEventListener("click", () => setEditing(!document.body.classList.contains("editing")));
   $("#edit-done").addEventListener("click", () => setEditing(false));
@@ -604,7 +628,7 @@
     const chosen = chosenCaps();
     $("#pick-count").textContent = fa(chosen.length);
     const li = (c) =>
-      `<li><span>${esc(c.n)}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>` +
+      `<li><span>${esc(c.n)}${c.h > 0 ? ` <span class="li-h">(${money(c.h)} نفرساعت)</span>` : ""}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>` +
       (CUSTOMER
         ? `<textarea class="inp cmt" data-cmt="${c.id}" placeholder="توضیح شما درباره‌ی این مورد (اختیاری)" aria-label="توضیح ${esc(c.n)}">${esc(COMMENTS[c.id] || "")}</textarea>`
         : c.note
@@ -619,8 +643,16 @@
             .map((cat) => `<h3>${esc(cat.n)}</h3><ul>${chosen.filter((c) => c.c === cat.k).map(li).join("")}</ul>`)
             .join("")
         : `<p class="empty">هنوز قابلیت تکمیلی انتخاب نشده است. روی کارت‌های بخش «ب» گزینه‌ی «نیاز داریم» را بزنید.</p>`) +
+      hoursSum(chosen) +
       (CUSTOMER ? sendForm() : "");
     $("#xlsx-picks").hidden = IN_FRAME || !window.XLSX;
+  }
+  function hoursSum(chosen) {
+    const a = sumH(DB.srs),
+      b = sumH(chosen);
+    if (!a && !b) return "";
+    const row = (label, n, cls = "") => `<div class="${cls}"><span>${label}</span><b>${money(n)} نفرساعت</b></div>`;
+    return `<div class="h-sum">${a ? row("برآورد بندهای سند", a) : ""}${b ? row("برآورد قابلیت‌های انتخاب‌شده", b) : ""}${a && b ? row("جمع برآورد", a + b, "tot") : ""}</div>`;
   }
   function sendForm() {
     const sent = store.get("sentAt", "");
@@ -646,7 +678,7 @@
     const chosen = chosenCaps();
     const payload = {
       name: WHO.name.trim(), role: WHO.role.trim(), mobile, general: WHO.general.trim(),
-      picks: chosen.map((c) => ({ id: c.id, n: c.n, c: DB.cats.find((x) => x.k === c.c)?.n || "" })),
+      picks: chosen.map((c) => ({ id: c.id, n: c.n, c: DB.cats.find((x) => x.k === c.c)?.n || "", ...(c.h > 0 ? { h: c.h } : {}) })),
       comments: Object.fromEntries(chosen.filter((c) => (COMMENTS[c.id] || "").trim()).map((c) => [c.id, COMMENTS[c.id].trim()])),
     };
     const btn = $("#send-picks");
@@ -708,8 +740,9 @@
       `ماژول فرم‌ساز پیشرفته\nهمه‌ی ${fa(DB.srs.length)} بند سند نیازمندی، به‌اضافه‌ی ${fa(chosen.length)} قابلیت تکمیلی:\n` +
       DB.cats
         .filter((cat) => chosen.some((c) => c.c === cat.k))
-        .map((cat) => `\n${cat.n}\n` + chosen.filter((c) => c.c === cat.k).map((c) => `- ${c.n}${c.note ? ` (یادداشت: ${c.note})` : ""}`).join("\n"))
-        .join("\n");
+        .map((cat) => `\n${cat.n}\n` + chosen.filter((c) => c.c === cat.k).map((c) => `- ${c.n}${c.h > 0 ? ` (${money(c.h)} نفرساعت)` : ""}${c.note ? ` (یادداشت: ${c.note})` : ""}`).join("\n"))
+        .join("\n") +
+      (sumH(chosen) ? `\n\nبرآورد قابلیت‌های انتخاب‌شده: ${money(sumH(chosen))} نفرساعت` : "");
     try {
       await navigator.clipboard.writeText(text);
       toast("فهرست کپی شد.");
@@ -719,19 +752,19 @@
     }
   });
   function exportXlsx(onlyPicked) {
-    const head = ["بخش", "دسته", "شماره", "عنوان", "عنوان فارسی", "توضیح", "جزئیات", "مثال", "نیاز داریم", "یادداشت جلسه"];
+    const head = ["بخش", "دسته", "شماره", "عنوان", "عنوان فارسی", "توضیح", "جزئیات", "مثال", "برآورد (نفرساعت)", "نیاز داریم", "یادداشت جلسه"];
     const rows = [];
     if (!onlyPicked)
       DB.srs.forEach((s) => {
         const g = DB.srsGroups.find((x) => x.k === s.g);
-        rows.push(["الف. نیازمندی‌های سند", g ? `${g.no || ""} ${g.n}`.trim() : "", s.no || "", s.n, s.fa || "", s.v || "", (s.pts || []).join("\n"), "", "در دامنه", s.note || ""]);
+        rows.push(["الف. نیازمندی‌های سند", g ? `${g.no || ""} ${g.n}`.trim() : "", s.no || "", s.n, s.fa || "", s.v || "", (s.pts || []).join("\n"), "", s.h || "", "در دامنه", s.note || ""]);
       });
     DB.caps.forEach((c, i) => {
       if (onlyPicked && !picked(c.id)) return;
-      rows.push(["ب. قابلیت‌های تکمیلی", DB.cats.find((x) => x.k === c.c)?.n || "", "ب-" + fa(i + 1), c.n, "", c.v || "", "", c.x || "", picked(c.id) ? "بله" : "", c.note || ""]);
+      rows.push(["ب. قابلیت‌های تکمیلی", DB.cats.find((x) => x.k === c.c)?.n || "", "ب-" + fa(i + 1), c.n, "", c.v || "", "", c.x || "", c.h || "", picked(c.id) ? "بله" : "", c.note || ""]);
     });
     const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
-    ws["!cols"] = [18, 22, 9, 30, 16, 60, 50, 30, 10, 40].map((wch) => ({ wch }));
+    ws["!cols"] = [18, 22, 9, 30, 16, 60, 50, 30, 12, 10, 40].map((wch) => ({ wch }));
     ws["!views"] = [{ RTL: true }];
     const wb = XLSX.utils.book_new();
     wb.Workbook = { Views: [{ RTL: true }] };

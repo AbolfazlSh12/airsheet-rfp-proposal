@@ -85,7 +85,9 @@ def clean_submission(body: dict) -> dict | None:
     picks = []
     for p in picks_in[:300]:
         if isinstance(p, dict) and text(p.get("id"), 64):
-            picks.append({"id": text(p.get("id"), 64), "n": text(p.get("n"), 200), "c": text(p.get("c"), 100)})
+            h = p.get("h")  # person-hours estimate shown on the page
+            picks.append({"id": text(p.get("id"), 64), "n": text(p.get("n"), 200), "c": text(p.get("c"), 100),
+                          "h": h if type(h) is int and 0 < h <= 100000 else None})
     raw = body.get("comments") if isinstance(body.get("comments"), dict) else {}
     ids = {p["id"] for p in picks}
     comments = {k[:64]: text(v, 1000) for k, v in list(raw.items())[:300] if k[:64] in ids and text(v, 1000)}
@@ -252,20 +254,25 @@ class Hub(BaseHTTPRequestHandler):
         if csv_out:
             buf = io.StringIO()
             w = csv.writer(buf)
-            w.writerow(["ارسال", "زمان (تهران)", "نام", "سمت", "موبایل", "شناسه", "قابلیت", "دسته", "توضیح", "توضیح کلی"])
+            w.writerow(["ارسال", "زمان (تهران)", "نام", "سمت", "موبایل", "شناسه", "قابلیت", "دسته", "نفرساعت", "توضیح", "توضیح کلی"])
             for sid, at, name, role, mobile, picks, comments, general, _ in subs:
                 cm = json.loads(comments or "{}")
                 for p in json.loads(picks or "[]") or [{"id": "", "n": "", "c": ""}]:
-                    w.writerow([sid, fa_time(at), name, role, mobile, p["id"], p["n"], p["c"], cm.get(p["id"], ""), general])
+                    w.writerow([sid, fa_time(at), name, role, mobile, p["id"], p["n"], p["c"], p.get("h") or "",
+                                cm.get(p["id"], ""), general])
             return self.send(200, ("﻿" + buf.getvalue()).encode(), "text/csv; charset=utf-8",
                              extra={"Content-Disposition": f'attachment; filename="{slug}.csv"'})
         cards = ""
         for sid, at, name, role, mobile, picks, comments, general, ip in subs:
             cm = json.loads(comments or "{}")
-            items = ""
+            items, hours = "", 0
             for p in json.loads(picks or "[]"):
                 note = "<div class=c>%s</div>" % escape(cm[p["id"]]) if cm.get(p["id"]) else ""
-                items += "<li>%s <small>(%s)</small>%s</li>" % (escape(p["n"]), escape(p["c"]), note)
+                h = p.get("h") or 0
+                hours += h
+                items += "<li>%s <small>(%s%s)</small>%s</li>" % (escape(p["n"]), escape(p["c"]), f"، {h:,} نفرساعت" if h else "", note)
+            if hours:
+                items += f"<li><b>جمع برآورد انتخاب‌ها: {hours:,} نفرساعت</b></li>"
             who = escape(name) + ("، " + escape(role) if role else "")
             meta = "ارسال %s، %s، %s، %s" % (sid, fa_time(at), escape(mobile) or "بدون شماره", escape(ip or ""))
             gen = "<div class=c>توضیح کلی: %s</div>" % escape(general) if general else ""

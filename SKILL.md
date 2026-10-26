@@ -109,7 +109,8 @@ These come from a real customer reaction and apply to everything the customer se
 texts, exports, any deck or message.
 
 1. Never say or imply that a capability already exists, "is available today", or "is possible by configuration / no
-   code". Customers who expect a tailored build hear "you get nothing new". No status chips, no effort sizes.
+   code". Customers who expect a tailored build hear "you get nothing new". No status chips, no S/M/L sizes.
+   Person-hours appear only when the user enters them, so the customer can decide by cost, and never as 0.
 2. Never let the material suggest the customer's document was incomplete, unclear or immature, or that we replaced
    their solutions with ours. Their items come first, in their own numbering, names, wording and even spelling, each
    with a demo. Our extras come after, as «قابلیت‌های تکمیلی» they may pick.
