@@ -62,7 +62,13 @@ def db() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS submissions (id INTEGER PRIMARY KEY, slug TEXT NOT NULL, created_at TEXT NOT NULL,"
         " name TEXT, role TEXT, mobile TEXT, picks TEXT, comments TEXT, general TEXT, ip TEXT, ua TEXT)"
     )
+    if "scope" not in {r[1] for r in con.execute("PRAGMA table_info(submissions)")}:
+        con.execute("ALTER TABLE submissions ADD COLUMN scope TEXT")  # in-scope items the customer gave hours to
     return con
+
+
+def hours(v) -> int | None:
+    return v if type(v) is int and 0 < v <= 100000 else None
 
 
 def proposal_dir(slug: str) -> Path | None:
@@ -85,15 +91,19 @@ def clean_submission(body: dict) -> dict | None:
     picks = []
     for p in picks_in[:300]:
         if isinstance(p, dict) and text(p.get("id"), 64):
-            h = p.get("h")  # person-hours estimate shown on the page
+            # h: our estimate shown on the card; ch: the customer's own proposal typed on the card
             picks.append({"id": text(p.get("id"), 64), "n": text(p.get("n"), 200), "c": text(p.get("c"), 100),
-                          "h": h if type(h) is int and 0 < h <= 100000 else None})
+                          "h": hours(p.get("h")), "ch": hours(p.get("ch"))})
+    scope = []
+    for p in (body.get("srs") if isinstance(body.get("srs"), list) else [])[:300]:
+        if isinstance(p, dict) and text(p.get("id"), 64) and hours(p.get("ch")):
+            scope.append({"id": text(p.get("id"), 64), "n": text(p.get("n"), 200), "h": hours(p.get("h")), "ch": hours(p.get("ch"))})
     raw = body.get("comments") if isinstance(body.get("comments"), dict) else {}
     ids = {p["id"] for p in picks}
     comments = {k[:64]: text(v, 1000) for k, v in list(raw.items())[:300] if k[:64] in ids and text(v, 1000)}
     return {
         "name": name, "role": text(body.get("role"), 100), "mobile": text(body.get("mobile"), 20),
-        "picks": picks, "comments": comments, "general": text(body.get("general"), 2000),
+        "picks": picks, "comments": comments, "general": text(body.get("general"), 2000), "scope": scope,
     }
 
 
@@ -221,11 +231,11 @@ class Hub(BaseHTTPRequestHandler):
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with _lock, closing(db()) as con, con:
             cur = con.execute(
-                "INSERT INTO submissions (slug, created_at, name, role, mobile, picks, comments, general, ip, ua)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO submissions (slug, created_at, name, role, mobile, picks, comments, general, ip, ua, scope)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (m.group(1), now, sub["name"], sub["role"], sub["mobile"], json.dumps(sub["picks"], ensure_ascii=False),
                  json.dumps(sub["comments"], ensure_ascii=False), sub["general"], self.client(),
-                 (self.headers.get("User-Agent") or "")[:300]),
+                 (self.headers.get("User-Agent") or "")[:300], json.dumps(sub["scope"], ensure_ascii=False)),
             )
         self.json(200, {"ok": True, "id": cur.lastrowid, "at": fa_time(now)})
 
@@ -249,34 +259,49 @@ class Hub(BaseHTTPRequestHandler):
             if not SLUG.match(slug):
                 return self.send(404, b"not found")
             subs = con.execute(
-                "SELECT id, created_at, name, role, mobile, picks, comments, general, ip FROM submissions"
+                "SELECT id, created_at, name, role, mobile, picks, comments, general, ip, scope FROM submissions"
                 " WHERE slug=? ORDER BY id DESC", (slug,)).fetchall()
         if csv_out:
             buf = io.StringIO()
             w = csv.writer(buf)
-            w.writerow(["ارسال", "زمان (تهران)", "نام", "سمت", "موبایل", "شناسه", "قابلیت", "دسته", "نفرساعت", "توضیح", "توضیح کلی"])
-            for sid, at, name, role, mobile, picks, comments, general, _ in subs:
+            w.writerow(["ارسال", "زمان (تهران)", "نام", "سمت", "موبایل", "شناسه", "قابلیت", "دسته", "برآورد ما (نفرساعت)",
+                        "پیشنهاد مشتری (نفرساعت)", "توضیح", "توضیح کلی"])
+            for sid, at, name, role, mobile, picks, comments, general, _, scope in subs:
                 cm = json.loads(comments or "{}")
-                for p in json.loads(picks or "[]") or [{"id": "", "n": "", "c": ""}]:
+                rows = [{**p, "c": "الف. بندهای سند"} for p in json.loads(scope or "[]")] + json.loads(picks or "[]")
+                for p in rows or [{"id": "", "n": "", "c": ""}]:
                     w.writerow([sid, fa_time(at), name, role, mobile, p["id"], p["n"], p["c"], p.get("h") or "",
-                                cm.get(p["id"], ""), general])
+                                p.get("ch") or "", cm.get(p["id"], ""), general])
             return self.send(200, ("﻿" + buf.getvalue()).encode(), "text/csv; charset=utf-8",
                              extra={"Content-Disposition": f'attachment; filename="{slug}.csv"'})
+
+        def hrs(p) -> str:
+            parts = ([f"برآورد ما {p['h']:,}"] if p.get("h") else []) + ([f"<b>پیشنهاد مشتری {p['ch']:,}</b>"] if p.get("ch") else [])
+            return "، " + "، ".join(parts) + " نفرساعت" if parts else ""
+
         cards = ""
-        for sid, at, name, role, mobile, picks, comments, general, ip in subs:
+        for sid, at, name, role, mobile, picks, comments, general, ip, scope in subs:
             cm = json.loads(comments or "{}")
-            items, hours = "", 0
+            items, ours, theirs = "", 0, 0
             for p in json.loads(picks or "[]"):
                 note = "<div class=c>%s</div>" % escape(cm[p["id"]]) if cm.get(p["id"]) else ""
-                h = p.get("h") or 0
-                hours += h
-                items += "<li>%s <small>(%s%s)</small>%s</li>" % (escape(p["n"]), escape(p["c"]), f"، {h:,} نفرساعت" if h else "", note)
-            if hours:
-                items += f"<li><b>جمع برآورد انتخاب‌ها: {hours:,} نفرساعت</b></li>"
+                ours += p.get("h") or 0
+                theirs += p.get("ch") or 0
+                items += "<li>%s <small>(%s%s)</small>%s</li>" % (escape(p["n"]), escape(p["c"]), hrs(p), note)
+            if ours:
+                items += f"<li><b>جمع برآورد ما برای انتخاب‌ها: {ours:,} نفرساعت</b></li>"
+            if theirs:
+                items += f"<li><b>جمع پیشنهاد مشتری برای انتخاب‌ها: {theirs:,} نفرساعت</b></li>"
+            sc = json.loads(scope or "[]")
+            scope_html = ""
+            if sc:
+                total = sum(p["ch"] for p in sc)
+                scope_html = ("<div class=muted>پیشنهاد نفرساعت مشتری برای بندهای سند:</div><ul>%s<li><b>جمع: %s نفرساعت</b></li></ul>"
+                              % ("".join("<li>%s <small>(%s)</small></li>" % (escape(p["n"]), hrs(p)[2:]) for p in sc), f"{total:,}"))
             who = escape(name) + ("، " + escape(role) if role else "")
             meta = "ارسال %s، %s، %s، %s" % (sid, fa_time(at), escape(mobile) or "بدون شماره", escape(ip or ""))
             gen = "<div class=c>توضیح کلی: %s</div>" % escape(general) if general else ""
-            cards += '<div class="card"><h2>%s</h2><div class="muted">%s</div><ul>%s</ul>%s</div>' % (who, meta, items, gen)
+            cards += '<div class="card"><h2>%s</h2><div class="muted">%s</div><ul>%s</ul>%s%s</div>' % (who, meta, items, scope_html, gen)
         body = (f'<p><a href="/admin/">همه‌ی پیشنهادها</a></p><h1>{escape(slug)}</h1>'
                 f'<p><a href="/admin/{slug}.csv">خروجی CSV برای Excel</a> ، <a href="/{slug}/">صفحه‌ی مشتری</a></p>'
                 + (cards or '<p class="muted">هنوز ارسالی نیست.</p>'))

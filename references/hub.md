@@ -62,6 +62,9 @@ proposal down: delete its folder (its submissions stay in the database).
 ## What the customer page does
 
 - Customer picks and comments stay in their browser (per proposal), so they can come back and change them.
+- Every card (both parts) has «پیشنهاد شما (نفرساعت)»: the customer's own person-hours proposal, kept in their browser,
+  summed in the drawer, exported to Excel and sent with the picks (`ch` on picks; `srs` for in-scope items). The admin
+  page and CSV show it beside our estimate. Older hub databases gain the `scope` column on start.
 - «انتخاب‌ها و ارسال» opens the drawer: picked items with a comment box each, name (required), role, mobile, a general
   comment, and «ارسال انتخاب‌ها». Every send is a new submission; the admin page shows all of them, newest first.
 

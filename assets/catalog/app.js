@@ -322,6 +322,13 @@
   const sumH = (list) => list.reduce((t, x) => t + (x.h > 0 ? x.h : 0), 0);
   const hTag = (x) => (x.h > 0 ? `<div class="c-h"><span>برآورد</span><b>${money(x.h)} نفرساعت</b></div>` : "");
   const hInput = (x) => (CUSTOMER ? "" : `<label class="ed c-hin">نفرساعت<input class="inp" inputmode="numeric" data-h="${x.id}" value="${x.h > 0 ? fa(x.h) : ""}" aria-label="نفرساعت ${esc(x.n)}"></label>`);
+  // customer build: the customer's own person-hours proposal per item, kept in their browser and sent with the picks
+  const MYH = CUSTOMER ? store.get("myh", {}) : {};
+  const sumMy = (list) => list.reduce((t, x) => t + (MYH[x.id] > 0 ? MYH[x.id] : 0), 0);
+  const myHInput = (x) =>
+    CUSTOMER
+      ? `<label class="c-hin my-h">پیشنهاد شما (نفرساعت)<input class="inp" inputmode="numeric" data-myh="${x.id}" value="${MYH[x.id] > 0 ? fa(MYH[x.id]) : ""}" aria-label="پیشنهاد نفرساعت شما برای ${esc(x.n)}"></label>`
+      : "";
   const edBar = (kind, id) =>
     `<span class="ed ed-bar"><button class="icon-btn" data-edit-item="${kind}:${id}" aria-label="ویرایش">${ICON.edit}</button><button class="icon-btn" data-del-item="${kind}:${id}" aria-label="حذف">${ICON.del}</button></span>`;
   function srsCard(s) {
@@ -330,7 +337,7 @@
       <h3>${esc(s.n)}${s.fa ? `<small>${esc(s.fa)}</small>` : ""}</h3>
       ${s.v ? `<p class="c-v">${esc(s.v)}</p>` : ""}${listHtml(s.pts)}
       ${s.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(s.note)}</div>` : ""}
-      ${hTag(s)}<div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div>${hInput(s)}</div></article>`;
+      ${hTag(s)}<div class="c-foot"><div class="c-demos">${demoLinks(s.ds || [])}</div>${hInput(s)}${myHInput(s)}</div></article>`;
   }
   function capCard(c, i) {
     return `<article class="card ${picked(c.id) ? "picked" : ""}" id="it-${c.id}">
@@ -338,7 +345,7 @@
       <h3>${esc(c.n)}</h3>
       ${c.v ? `<p class="c-v">${esc(c.v)}</p>` : ""}${c.x ? `<p class="c-x">${esc(c.x)}</p>` : ""}
       ${c.note ? `<div class="c-note"><b>یادداشت:</b> ${esc(c.note)}</div>` : ""}
-      ${hTag(c)}<div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div>${hInput(c)}<label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
+      ${hTag(c)}<div class="c-foot"><div class="c-demos">${c.d ? demoLinks([[c.d, "نمایش"]]) : ""}</div>${hInput(c)}${myHInput(c)}<label class="pick"><input type="checkbox" data-pick="${c.id}" ${picked(c.id) ? "checked" : ""}> نیاز داریم</label></div></article>`;
   }
   function renderRail() {
     const cnt = (kind, pred) => (kind === "a" ? DB.srs : DB.caps).filter(pred).length;
@@ -447,6 +454,15 @@
       FILE.schedule();
       return;
     }
+    const myh = e.target.dataset.myh;
+    if (myh) {
+      const v = parseInt(toEn(e.target.value).replace(/\D/g, ""), 10);
+      if (v > 0 && v <= 100000) MYH[myh] = v;
+      else delete MYH[myh];
+      e.target.value = MYH[myh] ? fa(MYH[myh]) : "";
+      store.set("myh", MYH);
+      return;
+    }
     const id = e.target.dataset.pick;
     if (!id) return;
     DB.picks = e.target.checked ? [...new Set([...DB.picks, id])] : DB.picks.filter((x) => x !== id);
@@ -458,9 +474,9 @@
     $("#pick-count").textContent = fa(DB.picks.length);
   });
   $("#catalog-list").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || !e.target.dataset.h) return;
+    if (e.key !== "Enter" || !(e.target.dataset.h || e.target.dataset.myh)) return;
     e.preventDefault();
-    const all = $$("[data-h]");
+    const all = $$(e.target.dataset.h ? "[data-h]" : "[data-myh]");
     all[all.indexOf(e.target) + 1]?.focus();
   });
   $("#q").addEventListener("input", (e) => {
@@ -625,7 +641,7 @@
     const chosen = chosenCaps();
     $("#pick-count").textContent = fa(chosen.length);
     const li = (c) =>
-      `<li><span>${esc(c.n)}${c.h > 0 ? ` <span class="li-h">(${money(c.h)} نفرساعت)</span>` : ""}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>` +
+      `<li><span>${esc(c.n)}${c.h > 0 ? ` <span class="li-h">(${money(c.h)} نفرساعت)</span>` : ""}${MYH[c.id] > 0 ? ` <span class="li-h">(پیشنهاد شما: ${money(MYH[c.id])})</span>` : ""}</span><button class="icon-btn" data-unpick="${c.id}" aria-label="حذف ${esc(c.n)}">${ICON.del}</button>` +
       (CUSTOMER
         ? `<textarea class="inp cmt" data-cmt="${c.id}" placeholder="توضیح شما درباره‌ی این مورد (اختیاری)" aria-label="توضیح ${esc(c.n)}">${esc(COMMENTS[c.id] || "")}</textarea>`
         : c.note
@@ -646,10 +662,14 @@
   }
   function hoursSum(chosen) {
     const a = sumH(DB.srs),
-      b = sumH(chosen);
-    if (!a && !b) return "";
+      b = sumH(chosen),
+      ma = sumMy(DB.srs),
+      mb = sumMy(chosen);
+    if (!a && !b && !ma && !mb) return "";
     const row = (label, n, cls = "") => `<div class="${cls}"><span>${label}</span><b>${money(n)} نفرساعت</b></div>`;
-    return `<div class="h-sum">${a ? row("برآورد بندهای سند", a) : ""}${b ? row("برآورد قابلیت‌های انتخاب‌شده", b) : ""}${a && b ? row("جمع برآورد", a + b, "tot") : ""}</div>`;
+    const ours = a || b ? `<div class="h-sum">${a ? row("برآورد بندهای سند", a) : ""}${b ? row("برآورد قابلیت‌های انتخاب‌شده", b) : ""}${a && b ? row("جمع برآورد", a + b, "tot") : ""}</div>` : "";
+    const theirs = ma || mb ? `<div class="h-sum">${ma ? row("پیشنهاد شما برای بندهای سند", ma) : ""}${mb ? row("پیشنهاد شما برای قابلیت‌های انتخاب‌شده", mb) : ""}${ma && mb ? row("جمع پیشنهاد شما", ma + mb, "tot") : ""}</div>` : "";
+    return ours + theirs;
   }
   function sendForm() {
     const sent = store.get("sentAt", "");
@@ -675,7 +695,8 @@
     const chosen = chosenCaps();
     const payload = {
       name: WHO.name.trim(), role: WHO.role.trim(), mobile, general: WHO.general.trim(),
-      picks: chosen.map((c) => ({ id: c.id, n: c.n, c: DB.cats.find((x) => x.k === c.c)?.n || "", ...(c.h > 0 ? { h: c.h } : {}) })),
+      picks: chosen.map((c) => ({ id: c.id, n: c.n, c: DB.cats.find((x) => x.k === c.c)?.n || "", ...(c.h > 0 ? { h: c.h } : {}), ...(MYH[c.id] > 0 ? { ch: MYH[c.id] } : {}) })),
+      srs: DB.srs.filter((s) => MYH[s.id] > 0).map((s) => ({ id: s.id, n: `${s.no ? `بند ${s.no} ` : ""}${s.n}`, ...(s.h > 0 ? { h: s.h } : {}), ch: MYH[s.id] })),
       comments: Object.fromEntries(chosen.filter((c) => (COMMENTS[c.id] || "").trim()).map((c) => [c.id, COMMENTS[c.id].trim()])),
     };
     const btn = $("#send-picks");
@@ -749,19 +770,19 @@
     }
   });
   function exportXlsx(onlyPicked) {
-    const head = ["بخش", "دسته", "شماره", "عنوان", "عنوان فارسی", "توضیح", "جزئیات", "مثال", "برآورد (نفرساعت)", "نیاز داریم", "یادداشت جلسه"];
+    const head = ["بخش", "دسته", "شماره", "عنوان", "عنوان فارسی", "توضیح", "جزئیات", "مثال", "برآورد (نفرساعت)", ...(CUSTOMER ? ["پیشنهاد شما (نفرساعت)"] : []), "نیاز داریم", "یادداشت جلسه"];
     const rows = [];
     if (!onlyPicked)
       DB.srs.forEach((s) => {
         const g = DB.srsGroups.find((x) => x.k === s.g);
-        rows.push(["الف. نیازمندی‌های سند", g ? `${g.no || ""} ${g.n}`.trim() : "", s.no || "", s.n, s.fa || "", s.v || "", (s.pts || []).join("\n"), "", s.h || "", "در دامنه", s.note || ""]);
+        rows.push(["الف. نیازمندی‌های سند", g ? `${g.no || ""} ${g.n}`.trim() : "", s.no || "", s.n, s.fa || "", s.v || "", (s.pts || []).join("\n"), "", s.h || "", ...(CUSTOMER ? [MYH[s.id] || ""] : []), "در دامنه", s.note || ""]);
       });
     DB.caps.forEach((c, i) => {
       if (onlyPicked && !picked(c.id)) return;
-      rows.push(["ب. قابلیت‌های تکمیلی", DB.cats.find((x) => x.k === c.c)?.n || "", "ب-" + fa(i + 1), c.n, "", c.v || "", "", c.x || "", c.h || "", picked(c.id) ? "بله" : "", c.note || ""]);
+      rows.push(["ب. قابلیت‌های تکمیلی", DB.cats.find((x) => x.k === c.c)?.n || "", "ب-" + fa(i + 1), c.n, "", c.v || "", "", c.x || "", c.h || "", ...(CUSTOMER ? [MYH[c.id] || ""] : []), picked(c.id) ? "بله" : "", c.note || ""]);
     });
     const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
-    ws["!cols"] = [18, 22, 9, 30, 16, 60, 50, 30, 12, 10, 40].map((wch) => ({ wch }));
+    ws["!cols"] = [18, 22, 9, 30, 16, 60, 50, 30, 12, ...(CUSTOMER ? [14] : []), 10, 40].map((wch) => ({ wch }));
     ws["!views"] = [{ RTL: true }];
     const wb = XLSX.utils.book_new();
     wb.Workbook = { Views: [{ RTL: true }] };

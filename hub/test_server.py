@@ -32,7 +32,8 @@ def req(method, path, body=None, headers=None):
 
 
 good = {"name": "مریم احمدی", "role": "مدیر ESS", "mobile": "09120000000",
-        "picks": [{"id": "m1", "n": "قیف تکمیل فرم", "c": "گزارش و سنجش", "h": 40}, {"id": "a3", "n": "پر کردن از روی سند", "c": "هوش مصنوعی", "h": "9999999"}],
+        "picks": [{"id": "m1", "n": "قیف تکمیل فرم", "c": "گزارش و سنجش", "h": 40, "ch": 25}, {"id": "a3", "n": "پر کردن از روی سند", "c": "هوش مصنوعی", "h": "9999999", "ch": -3}],
+        "srs": [{"id": "s1", "n": "بند ۱-۱ DATA ENTRY GRID", "h": 120, "ch": 90}, {"id": "s2", "n": "بی‌پیشنهاد", "h": 10}],
         "comments": {"m1": "برای ما مهم است", "zz": "not picked, dropped"}, "general": "جلسه‌ی بعد"}
 
 assert req("GET", "/")[0] == 404
@@ -58,10 +59,12 @@ assert st == 200 and "demo-abc" in body.decode()
 st, body, _ = req("GET", "/admin/demo-abc", headers=AUTH)
 page = body.decode()
 assert st == 200 and "مریم احمدی" in page and "برای ما مهم است" in page and "not picked" not in page
-assert "40 نفرساعت" in page and "جمع برآورد انتخاب‌ها: 40 نفرساعت" in page, "person-hours: valid kept, string dropped"
+assert "برآورد ما 40" in page and "جمع برآورد ما برای انتخاب‌ها: 40 نفرساعت" in page, "person-hours: valid kept, string dropped"
+assert "پیشنهاد مشتری 25" in page and "جمع پیشنهاد مشتری برای انتخاب‌ها: 25 نفرساعت" in page, "customer hours on picks"
+assert "DATA ENTRY GRID" in page and "پیشنهاد مشتری 90" in page and "بی‌پیشنهاد" not in page, "customer hours on in-scope items"
 st, body, hd = req("GET", "/admin/demo-abc.csv", headers=AUTH)
 csv_text = body.decode("utf-8")
-assert st == 200 and csv_text.startswith("﻿") and csv_text.count("مریم احمدی") == 2 and "attachment" in hd["Content-Disposition"] and ",40," in csv_text
+assert st == 200 and csv_text.startswith("﻿") and csv_text.count("مریم احمدی") == 3 and "attachment" in hd["Content-Disposition"] and ",40,25," in csv_text and ",120,90," in csv_text
 
 statuses = [req("POST", "/api/demo-abc/submit", good, {"X-Real-IP": "9.9.9.9"})[0] for _ in range(11)]
 assert statuses[:10] == [200] * 10 and statuses[10] == 429, statuses
